@@ -1,0 +1,9 @@
+description: "Values over time for Swift: keyframe tracks evaluated at exact instants, easing as a supplied curve, springs, looping, and layers with a lifetime. Every evaluation is a pure function of time."
+topics:
+  - molecules
+  - timeline
+  - animation
+  - keyframes
+homepage: "https://swift-institute.org"
+readme:
+  family: E
