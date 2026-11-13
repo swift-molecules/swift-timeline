@@ -135,6 +135,14 @@ extension `Timeline Tests` {
             let step = 1e-6
             #expect(abs(thrown.progress(step, 1) / step - 6) < 1e-3)
         }
+
+        @Test
+        func `A spring easing from frequency and ratio is the easing of that spring`() throws {
+            let spring = try Spring(frequency: 12.0, ratio: 0.4)
+            let short = Timeline.Easing<Double>.spring(frequency: 12, ratio: 0.4, velocity: 3)
+            let long = Timeline.Easing<Double>.spring(spring, velocity: 3)
+            #expect([0, 0.05, 0.3, 2].allSatisfy { short.progress($0, 1) == long.progress($0, 1) })
+        }
     }
 }
 
@@ -313,6 +321,17 @@ extension `Timeline Tests` {
             let values = copies.map { $0.value(at: time, interpolating: `Timeline Tests`.mix) }
             #expect(zip(values, [5.0, 4, 3, 2]).allSatisfy { abs($0 - $1) < 1e-12 })
             #expect(track.staggered(count: 0, every: 1).isEmpty)
+        }
+
+        @Test
+        func `An uneven stagger matches the even one for equal weights`() throws {
+            let track = try `Timeline Tests`.ramp()
+            let even = track.staggered(count: 4, every: `Timeline Tests`.ratio(1, 10))
+            let weighted = track.staggered(count: 4, over: `Timeline Tests`.ratio(3, 10), weights: repeatElement(Rational(1), count: 3))
+            #expect(weighted.map(\.start) == even.map(\.start))
+            let uneven = track.staggered(count: 3, over: 2, weights: [1, 3])
+            #expect(uneven.map(\.start) == [1, `Timeline Tests`.ratio(3, 2), 3])
+            #expect(track.staggered(count: 0, over: 2, weights: [Rational]()).isEmpty)
         }
     }
 }
@@ -587,6 +606,65 @@ extension `Timeline Tests` {
             #expect(abs(slope(4 - 2 * step) - 8) < 1e-4)
             let line = `Timeline Tests`.Values(ordered: [(0, 0), (1, 1), (2, 2)])
             #expect((0...20).allSatisfy { abs(line.smooth(at: `Timeline Tests`.ratio($0, 10)) - Double($0) / 10) < 1e-15 })
+        }
+    }
+}
+
+extension `Timeline Tests` {
+    @Suite
+    struct Instants {
+        /// An endless deterministic source of weights in 0..<1, the way a caller's random source would give them.
+        fileprivate static func draws(seed: UInt64) -> some Sequence<Rational> {
+            var state = seed
+            return AnyIterator<Rational> {
+                state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                return `Timeline Tests`.ratio(Int(state >> 54), 1024)
+            }
+            .lazy
+        }
+
+        @Test
+        func `The first instant is the start and the last the end, exactly`() {
+            let (start, end) = (`Timeline Tests`.ratio(1001, 30000), `Timeline Tests`.ratio(7, 3))
+            let instants = Timeline.instants(9, from: start, to: end, weights: Self.draws(seed: 7))
+            #expect(instants.count == 9)
+            #expect(instants.first == start)
+            #expect(instants.last == end)
+            let exact = Timeline.instants(3, from: 0, to: 2, weights: [1, 3])
+            #expect(exact == [0, `Timeline Tests`.ratio(1, 2), 2])
+        }
+
+        @Test
+        func `Instants never go back, and a zero weight makes two coincide`() {
+            [UInt64(1), 2, 3, 99].forEach { seed in
+                let instants = Timeline.instants(40, from: -1, to: 5, weights: Self.draws(seed: seed))
+                #expect(zip(instants, instants.dropFirst()).allSatisfy { $0 <= $1 })
+            }
+            let instants = Timeline.instants(4, from: 0, to: 1, weights: [1, 0, 1])
+            #expect(instants == [0, `Timeline Tests`.ratio(1, 2), `Timeline Tests`.ratio(1, 2), 1])
+        }
+
+        @Test
+        func `Equal weights give the even stagger`() {
+            let instants = Timeline.instants(6, from: 2, to: 7, weights: repeatElement(`Timeline Tests`.ratio(1, 3), count: 5))
+            #expect(instants == [2, 3, 4, 5, 6, 7])
+        }
+
+        @Test
+        func `Only the weights' proportions matter`() {
+            let weights = Array(Self.draws(seed: 11).prefix(7))
+            let factor = `Timeline Tests`.ratio(7, 3)
+            let plain = Timeline.instants(8, from: 1, to: 4, weights: weights)
+            let scaled = Timeline.instants(8, from: 1, to: 4, weights: weights.map { $0 * factor })
+            #expect(plain == scaled)
+        }
+
+        @Test
+        func `No events, one event and two events`() {
+            #expect(Timeline.instants(0, from: 1, to: 4, weights: [Rational]()).isEmpty)
+            #expect(Timeline.instants(1, from: 1, to: 4, weights: [Rational]()) == [1])
+            #expect(Timeline.instants(2, from: 1, to: 4, weights: [`Timeline Tests`.ratio(1, 1000)]) == [1, 4])
+            #expect(Timeline.instants(2, from: 1, to: 4, weights: Self.draws(seed: 5)) == [1, 4])
         }
     }
 }

@@ -53,6 +53,19 @@ extension Timeline.Easing where Scalar: Exponential.`Protocol` & Trigonometry.Ci
         let start = Spring<Scalar>.State(displacement: 1, velocity: -velocity)
         return Self { elapsed, _ in 1 - spring.displacement(at: elapsed, from: start) }
     }
+
+    /// The spring easing of a spring with a natural frequency and a damping ratio, as `Spring(frequency:ratio:)`.
+    ///
+    /// For numbers written in source: a frequency that is not positive and finite, or a ratio that is negative
+    /// or not finite, traps. A spring built at run time goes through `Spring(frequency:ratio:)`, which throws,
+    /// and ``spring(_:velocity:)``.
+    public static func spring(frequency: Scalar, ratio: Scalar, velocity: Scalar = 0) -> Self {
+        do throws(Spring<Scalar>.Error) {
+            return spring(try Spring(frequency: frequency, ratio: ratio), velocity: velocity)
+        } catch {
+            preconditionFailure("A spring's frequency is positive and finite and its damping ratio finite and not negative")
+        }
+    }
 }
 
 extension Timeline.Easing {
