@@ -124,7 +124,7 @@ extension Timeline.Track {
 
     /// That many copies, the first unchanged and the last shifted by `span`, the gaps between neighbours in
     /// proportion to weights drawn from a sequence, as ``Timeline/instants(_:from:to:weights:)``.
-    public func staggered(count: Cardinal, over span: Rational, weights: some Sequence<Rational>) -> [Self] {
+    public func staggered(count: Cardinal, over span: Rational, weights: some Swift.Sequence<Rational>) -> [Self] {
         Timeline.instants(count, from: .zero, to: span, weights: weights).map(shifted(by:))
     }
 }

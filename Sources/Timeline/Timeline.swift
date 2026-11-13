@@ -12,7 +12,7 @@ extension Timeline {
         _ count: Cardinal,
         from start: Rational,
         to end: Rational,
-        weights: some Sequence<Rational>
+        weights: some Swift.Sequence<Rational>
     ) -> [Rational] {
         let count = Int(bitPattern: count)
         guard count > 1 else { return count == 1 ? [start] : [] }

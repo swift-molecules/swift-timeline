@@ -614,7 +614,7 @@ extension `Timeline Tests` {
     @Suite
     struct Instants {
         /// An endless deterministic source of weights in 0..<1, the way a caller's random source would give them.
-        fileprivate static func draws(seed: UInt64) -> some Sequence<Rational> {
+        fileprivate static func draws(seed: UInt64) -> some Swift.Sequence<Rational> {
             var state = seed
             return AnyIterator<Rational> {
                 state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
