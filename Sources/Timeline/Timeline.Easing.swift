@@ -110,7 +110,7 @@ extension Timeline.Easing {
     /// A value to a whole power, by multiplication alone.
     private static func raised(_ value: Scalar, to power: Cardinal) -> Scalar {
         var result: Scalar = 1
-        (0..<power.rawValue).forEach { _ in result *= value }
+        (0..<Int(bitPattern: power)).forEach { _ in result *= value }
         return result
     }
 }

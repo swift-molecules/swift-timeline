@@ -493,7 +493,7 @@ extension `Timeline Tests` {
         func `An easing reversed is one minus its progress at the time left, and reversing twice is the easing up to rounding`() throws {
             let curve = try Timeline.Easing<Double>.bezier(`Timeline Tests`.timing(0.7, 0, 0.84, 0))
             for easing in [curve, .smooth, .power(3)] {
-                for step in 0...16 {
+                (0...16).forEach { step in
                     let elapsed = Double(step) / 4
                     #expect(easing.reversed.progress(elapsed, 4) == 1 - easing.progress(4 - elapsed, 4))
                     #expect(abs(easing.reversed.reversed.progress(elapsed, 4) - easing.progress(elapsed, 4)) < 1e-15)
@@ -506,7 +506,7 @@ extension `Timeline Tests` {
             let easing = Timeline.Easing<Double>.power(3)
             let symmetric = easing.symmetric
             #expect(symmetric.progress(2, 4) == 0.5)
-            for step in 0...8 {
+            (0...8).forEach { step in
                 let elapsed = Double(step) / 4
                 #expect(symmetric.progress(elapsed, 4) == easing.progress(2 * elapsed, 4) / 2)
                 #expect(abs(symmetric.progress(4 - elapsed, 4) - (1 - symmetric.progress(elapsed, 4))) < 1e-15)
