@@ -54,3 +54,61 @@ extension Timeline.Easing where Scalar: Exponential.`Protocol` & Trigonometry.Ci
         return Self { elapsed, _ in 1 - spring.displacement(at: elapsed, from: start) }
     }
 }
+
+extension Timeline.Easing {
+    /// The timing curve through (0, 0), (`x1`, `y1`), (`x2`, `y2`) and (1, 1), the four numbers a cubic
+    /// Bézier timing function is written with.
+    ///
+    /// For numbers written in source: an inner x outside 0…1 or an inner y that is not finite traps. A curve
+    /// built at run time goes through ``bezier(_:)``, which throws.
+    public static func bezier(_ x1: Scalar, _ y1: Scalar, _ x2: Scalar, _ y2: Scalar) -> Self {
+        let curve = Bezier(start: Point(x: 0, y: 0), control1: Point(x: x1, y: y1), control2: Point(x: x2, y: y2), end: Point(x: 1, y: 1))
+        do throws(Error) {
+            return try bezier(curve)
+        } catch {
+            preconditionFailure("A timing curve's inner x lies in 0...1 and its inner y is finite")
+        }
+    }
+
+    /// Level at both ends: 3u² − 2u³ of the fraction u.
+    public static var smooth: Self {
+        Self(fraction: { fraction in
+            let u = clamped(fraction)
+            return u * u * (3 - 2 * u)
+        })
+    }
+
+    /// Slow to start: the fraction to a power.
+    public static func easeIn(power: Int = 2) -> Self {
+        precondition(power >= 1, "An easing's power is at least one")
+        return Self(fraction: { fraction in raised(clamped(fraction), to: power) })
+    }
+
+    /// Quick to start, long to settle: one minus what is left of the fraction to a power.
+    public static func easeOut(power: Int = 2) -> Self {
+        precondition(power >= 1, "An easing's power is at least one")
+        return Self(fraction: { fraction in 1 - raised(1 - clamped(fraction), to: power) })
+    }
+
+    /// Slow at both ends: ``easeIn(power:)`` over the first half and ``easeOut(power:)`` over the second.
+    public static func easeInOut(power: Int = 2) -> Self {
+        precondition(power >= 1, "An easing's power is at least one")
+        return Self(fraction: { fraction in
+            let u = clamped(fraction)
+            guard u >= 1 / 2 else { return raised(2 * u, to: power) / 2 }
+            return 1 - raised(2 - 2 * u, to: power) / 2
+        })
+    }
+
+    /// The fraction held to 0…1.
+    private static func clamped(_ fraction: Scalar) -> Scalar {
+        Swift.min(Swift.max(fraction, 0), 1)
+    }
+
+    /// A value to a whole power, by multiplication alone.
+    private static func raised(_ value: Scalar, to power: Int) -> Scalar {
+        var result: Scalar = 1
+        (0..<power).forEach { _ in result *= value }
+        return result
+    }
+}

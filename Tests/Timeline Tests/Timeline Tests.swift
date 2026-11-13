@@ -460,3 +460,105 @@ extension `Timeline Tests` {
         }
     }
 }
+
+extension `Timeline Tests` {
+    @Suite
+    struct Shorthand {
+        @Test
+        func `Four numbers make the Bezier easing the curve through them would`() throws {
+            let numbers = Timeline.Easing<Double>.bezier(0.16, 1, 0.3, 1)
+            let curve = try Timeline.Easing<Double>.bezier(`Timeline Tests`.timing(0.16, 1, 0.3, 1))
+            #expect((0...40).allSatisfy { numbers.progress(Double($0), 40) == curve.progress(Double($0), 40) })
+        }
+
+        @Test
+        func `Named easings run from zero to one, hold beyond their ends, and have their shapes`() {
+            let easings: [Timeline.Easing<Double>] = [.smooth, .easeIn(), .easeOut(), .easeInOut(), .easeIn(power: 3), .easeOut(power: 4), .easeInOut(power: 3)]
+            for easing in easings {
+                #expect(easing.progress(0, 1) == 0 && easing.progress(1, 1) == 1)
+                #expect(easing.progress(-1, 1) == 0 && easing.progress(2, 1) == 1)
+                #expect((0..<32).allSatisfy { easing.progress(Double($0), 32) <= easing.progress(Double($0 + 1), 32) })
+            }
+            #expect(Timeline.Easing<Double>.smooth.progress(1, 4) == 0.15625)
+            #expect(Timeline.Easing<Double>.smooth.progress(1, 2) == 0.5)
+            #expect(Timeline.Easing<Double>.easeIn(power: 3).progress(1, 2) == 0.125)
+            #expect(Timeline.Easing<Double>.easeOut(power: 4).progress(1, 2) == 0.9375)
+            #expect(Timeline.Easing<Double>.easeInOut().progress(1, 4) == 0.125)
+            #expect(Timeline.Easing<Double>.easeInOut().progress(3, 4) == 0.875)
+            #expect(Timeline.Easing<Double>.easeInOut(power: 3).progress(1, 2) == 0.5)
+        }
+
+        @Test
+        func `Keys in order make a track without a throw, and steps hold each value until the next`() {
+            let track = `Timeline Tests`.Values(ordered: [(1, 0), (2, 10), (4, 40)])
+            #expect(track.keyframes.map(\.time) == [1, 2, 4])
+            #expect(track.value(at: 3) == 25 && track.value(at: 0) == 0 && track.value(at: 9) == 40)
+            let eased = `Timeline Tests`.Values(ordered: [(0, 0), (2, 1)], easing: .smooth)
+            #expect(eased.value(at: `Timeline Tests`.ratio(1, 2)) == 0.15625)
+            let steps = `Timeline Tests`.Values.steps([(0, 0), (2, 1), (3, 0)])
+            #expect(steps.value(at: `Timeline Tests`.ratio(199, 100)) == 0)
+            #expect(steps.value(at: 2) == 1 && steps.value(at: `Timeline Tests`.ratio(299, 100)) == 1)
+            #expect(steps.value(at: 3) == 0 && steps.value(at: 10) == 0)
+            let keyframes = `Timeline Tests`.Values(ordered: [Keyframe(at: 0, 0, easing: .hold), Keyframe(at: 1, 1)])
+            #expect(keyframes.value(at: `Timeline Tests`.ratio(1, 2)) == 0)
+        }
+
+        @Test
+        func `A Scalar track is mixed straight, also when looped`() throws {
+            let track = try `Timeline Tests`.ramp()
+            let times = (0...50).map { `Timeline Tests`.ratio($0, 10) }
+            #expect(times.allSatisfy { track.value(at: $0) == track.value(at: $0, interpolating: `Timeline Tests`.mix) })
+            let loop = try Timeline.Loop(period: 1)
+            #expect(track.value(at: `Timeline Tests`.ratio(5, 2), looping: loop) == 5)
+        }
+
+        @Test
+        func `A ramp rises from zero to one over its duration on its easing`() {
+            let ramp = `Timeline Tests`.Values.ramp(at: 2, lasting: 4)
+            #expect(ramp.value(at: 1) == 0 && ramp.value(at: 2) == 0)
+            #expect(ramp.value(at: 3) == 0.25 && ramp.value(at: 6) == 1 && ramp.value(at: 9) == 1)
+            let smooth = `Timeline Tests`.Values.ramp(at: 0, lasting: 2, easing: .smooth)
+            #expect(smooth.value(at: `Timeline Tests`.ratio(1, 2)) == 0.15625)
+        }
+
+        @Test
+        func `Hits jump to their strength and die away to zero`() {
+            let hits = `Timeline Tests`.Values.hits([(at: 1, strength: 1, lasting: 2), (at: 4, strength: 0.5, lasting: 1), (at: 10, strength: 0.8, lasting: 4)])
+            #expect(hits.value(at: -100) == 0 && hits.value(at: `Timeline Tests`.ratio(99, 100)) == 0)
+            #expect(hits.value(at: 1) == 1)
+            #expect(abs(hits.value(at: 2) - 0.125) < 1e-15)
+            #expect(hits.value(at: 3) == 0 && hits.value(at: `Timeline Tests`.ratio(399, 100)) == 0)
+            #expect(hits.value(at: 4) == 0.5)
+            #expect(hits.value(at: 5) == 0 && hits.value(at: 7) == 0 && hits.value(at: `Timeline Tests`.ratio(999, 100)) == 0)
+            #expect(hits.value(at: 10) == 0.8 && hits.value(at: 14) == 0 && hits.value(at: 100) == 0)
+            let even = `Timeline Tests`.Values.hits([(at: 0, strength: 1, lasting: 4)], easing: .linear)
+            #expect(even.value(at: 1) == 0.75)
+            #expect(`Timeline Tests`.Values.hits([]).value(at: 3) == 0)
+        }
+
+        @Test
+        func `A smooth curve passes through every key, meets each with its neighbours' slope, and is cubic between`() {
+            let keys: [(Rational, Double)] = [(0, 0), (1, 2), (3, 2), (4, 10)]
+            let track = `Timeline Tests`.Values(ordered: keys)
+            #expect(keys.allSatisfy { track.smooth(at: $0.0) == $0.1 })
+            #expect(track.smooth(at: -1) == 0 && track.smooth(at: 5) == 10)
+            let step = 1e-6
+            func slope(_ time: Double) -> Double {
+                let near = { (offset: Double) in
+                    track.smooth(at: Rational(Int((time + offset) * 1e7)) * `Timeline Tests`.ratio(1, 10_000_000))
+                }
+                return (near(step) - near(-step)) / (2 * step)
+            }
+            #expect(abs(slope(1) - 2.0 / 3) < 1e-4)
+            #expect(abs(slope(3) - 8.0 / 3) < 1e-4)
+            // On the first segment, slope 2 leaving 0 and 2/3 entering 1: Hermite at one half.
+            let half = 0.5 * 0 + 0.125 * 2 + 0.5 * 2 - 0.125 * (2.0 / 3)
+            #expect(abs(track.smooth(at: `Timeline Tests`.ratio(1, 2)) - half) < 1e-15)
+            let resting = track.smooth(at: `Timeline Tests`.ratio(7, 2), first: 0, last: 0)
+            // Slope 8/3 leaving 3 and none entering 4.
+            #expect(abs(resting - (0.5 * 2 + 0.125 * 8.0 / 3 + 0.5 * 10)) < 1e-12)
+            let line = `Timeline Tests`.Values(ordered: [(0, 0), (1, 1), (2, 2)])
+            #expect((0...20).allSatisfy { abs(line.smooth(at: `Timeline Tests`.ratio($0, 10)) - Double($0) / 10) < 1e-15 })
+        }
+    }
+}
