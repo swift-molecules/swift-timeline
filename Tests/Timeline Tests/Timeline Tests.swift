@@ -473,7 +473,7 @@ extension `Timeline Tests` {
 
         @Test
         func `Named easings run from zero to one, hold beyond their ends, and have their shapes`() {
-            let easings: [Timeline.Easing<Double>] = [.smooth, .easeIn(), .easeOut(), .easeInOut(), .easeIn(power: 3), .easeOut(power: 4), .easeInOut(power: 3)]
+            let easings: [Timeline.Easing<Double>] = [.smooth, .power(1), .power(2), .power(2).reversed, .power(2).symmetric, .power(3), .power(4).reversed, .power(3).symmetric]
             for easing in easings {
                 #expect(easing.progress(0, 1) == 0 && easing.progress(1, 1) == 1)
                 #expect(easing.progress(-1, 1) == 0 && easing.progress(2, 1) == 1)
@@ -481,11 +481,36 @@ extension `Timeline Tests` {
             }
             #expect(Timeline.Easing<Double>.smooth.progress(1, 4) == 0.15625)
             #expect(Timeline.Easing<Double>.smooth.progress(1, 2) == 0.5)
-            #expect(Timeline.Easing<Double>.easeIn(power: 3).progress(1, 2) == 0.125)
-            #expect(Timeline.Easing<Double>.easeOut(power: 4).progress(1, 2) == 0.9375)
-            #expect(Timeline.Easing<Double>.easeInOut().progress(1, 4) == 0.125)
-            #expect(Timeline.Easing<Double>.easeInOut().progress(3, 4) == 0.875)
-            #expect(Timeline.Easing<Double>.easeInOut(power: 3).progress(1, 2) == 0.5)
+            #expect(Timeline.Easing<Double>.power(3).progress(1, 2) == 0.125)
+            #expect(Timeline.Easing<Double>.power(4).reversed.progress(1, 2) == 0.9375)
+            #expect(Timeline.Easing<Double>.power(2).symmetric.progress(1, 4) == 0.125)
+            #expect(Timeline.Easing<Double>.power(2).symmetric.progress(3, 4) == 0.875)
+            #expect(Timeline.Easing<Double>.power(3).symmetric.progress(1, 2) == 0.5)
+            #expect((0...32).allSatisfy { Timeline.Easing<Double>.power(1).progress(Double($0), 32) == Double($0) / 32 })
+        }
+
+        @Test
+        func `An easing reversed is one minus its progress at the time left, and reversing twice is the easing up to rounding`() throws {
+            let curve = try Timeline.Easing<Double>.bezier(`Timeline Tests`.timing(0.7, 0, 0.84, 0))
+            for easing in [curve, .smooth, .power(3)] {
+                for step in 0...16 {
+                    let elapsed = Double(step) / 4
+                    #expect(easing.reversed.progress(elapsed, 4) == 1 - easing.progress(4 - elapsed, 4))
+                    #expect(abs(easing.reversed.reversed.progress(elapsed, 4) - easing.progress(elapsed, 4)) < 1e-15)
+                }
+            }
+        }
+
+        @Test
+        func `A symmetric easing is the easing over the first half and its reverse over the second`() {
+            let easing = Timeline.Easing<Double>.power(3)
+            let symmetric = easing.symmetric
+            #expect(symmetric.progress(2, 4) == 0.5)
+            for step in 0...8 {
+                let elapsed = Double(step) / 4
+                #expect(symmetric.progress(elapsed, 4) == easing.progress(2 * elapsed, 4) / 2)
+                #expect(abs(symmetric.progress(4 - elapsed, 4) - (1 - symmetric.progress(elapsed, 4))) < 1e-15)
+            }
         }
 
         @Test
@@ -522,8 +547,11 @@ extension `Timeline Tests` {
         }
 
         @Test
-        func `Hits jump to their strength and die away to zero`() {
-            let hits = `Timeline Tests`.Values.hits([(at: 1, strength: 1, lasting: 2), (at: 4, strength: 0.5, lasting: 1), (at: 10, strength: 0.8, lasting: 4)])
+        func `Pulses jump to their peak and die away to zero`() {
+            let hits = `Timeline Tests`.Values.pulses(
+                [(at: 1, peak: 1, lasting: 2), (at: 4, peak: 0.5, lasting: 1), (at: 10, peak: 0.8, lasting: 4)],
+                easing: .power(3).reversed
+            )
             #expect(hits.value(at: -100) == 0 && hits.value(at: `Timeline Tests`.ratio(99, 100)) == 0)
             #expect(hits.value(at: 1) == 1)
             #expect(abs(hits.value(at: 2) - 0.125) < 1e-15)
@@ -531,9 +559,10 @@ extension `Timeline Tests` {
             #expect(hits.value(at: 4) == 0.5)
             #expect(hits.value(at: 5) == 0 && hits.value(at: 7) == 0 && hits.value(at: `Timeline Tests`.ratio(999, 100)) == 0)
             #expect(hits.value(at: 10) == 0.8 && hits.value(at: 14) == 0 && hits.value(at: 100) == 0)
-            let even = `Timeline Tests`.Values.hits([(at: 0, strength: 1, lasting: 4)], easing: .linear)
+            #expect(hits.start == -1)
+            let even = `Timeline Tests`.Values.pulses([(at: 0, peak: 1, lasting: 4)])
             #expect(even.value(at: 1) == 0.75)
-            #expect(`Timeline Tests`.Values.hits([]).value(at: 3) == 0)
+            #expect(`Timeline Tests`.Values.pulses([]).value(at: 3) == 0)
         }
 
         @Test
@@ -554,9 +583,8 @@ extension `Timeline Tests` {
             // On the first segment, slope 2 leaving 0 and 2/3 entering 1: Hermite at one half.
             let half = 0.5 * 0 + 0.125 * 2 + 0.5 * 2 - 0.125 * (2.0 / 3)
             #expect(abs(track.smooth(at: `Timeline Tests`.ratio(1, 2)) - half) < 1e-15)
-            let resting = track.smooth(at: `Timeline Tests`.ratio(7, 2), first: 0, last: 0)
-            // Slope 8/3 leaving 3 and none entering 4.
-            #expect(abs(resting - (0.5 * 2 + 0.125 * 8.0 / 3 + 0.5 * 10)) < 1e-12)
+            // At the last key the slope is that to its one neighbour: 8 from 3 to 4.
+            #expect(abs(slope(4 - 2 * step) - 8) < 1e-4)
             let line = `Timeline Tests`.Values(ordered: [(0, 0), (1, 1), (2, 2)])
             #expect((0...20).allSatisfy { abs(line.smooth(at: `Timeline Tests`.ratio($0, 10)) - Double($0) / 10) < 1e-15 })
         }

@@ -78,26 +78,28 @@ extension Timeline.Easing {
         })
     }
 
-    /// Slow to start: the fraction to a power.
-    public static func easeIn(power: Int = 2) -> Self {
-        precondition(power >= 1, "An easing's power is at least one")
-        return Self(fraction: { fraction in raised(clamped(fraction), to: power) })
+    /// The fraction to a whole power of at least one, by multiplication alone: slow to start for a power
+    /// above one. ``reversed`` of it is quick to start and ``symmetric`` slow at both ends.
+    public static func power(_ exponent: Cardinal) -> Self {
+        precondition(exponent >= 1, "An easing's power is at least one")
+        return Self(fraction: { fraction in raised(clamped(fraction), to: exponent) })
     }
 
-    /// Quick to start, long to settle: one minus what is left of the fraction to a power.
-    public static func easeOut(power: Int = 2) -> Self {
-        precondition(power >= 1, "An easing's power is at least one")
-        return Self(fraction: { fraction in 1 - raised(1 - clamped(fraction), to: power) })
+    /// The easing played backwards: one minus its progress at the time left, the progress a segment
+    /// needs to retrace this one's values from its end to its start.
+    public var reversed: Self {
+        let progress = progress
+        return Self { elapsed, duration in 1 - progress(duration - elapsed, duration) }
     }
 
-    /// Slow at both ends: ``easeIn(power:)`` over the first half and ``easeOut(power:)`` over the second.
-    public static func easeInOut(power: Int = 2) -> Self {
-        precondition(power >= 1, "An easing's power is at least one")
-        return Self(fraction: { fraction in
-            let u = clamped(fraction)
-            guard u >= 1 / 2 else { return raised(2 * u, to: power) / 2 }
-            return 1 - raised(2 - 2 * u, to: power) / 2
-        })
+    /// This easing over the first half of the duration and its ``reversed`` over the second, each squeezed
+    /// into its half: one half at the middle, and the same shape seen from either end.
+    public var symmetric: Self {
+        let progress = progress
+        return Self { elapsed, duration in
+            guard 2 * elapsed >= duration else { return progress(2 * elapsed, duration) / 2 }
+            return 1 - progress(2 * (duration - elapsed), duration) / 2
+        }
     }
 
     /// The fraction held to 0…1.
@@ -106,9 +108,9 @@ extension Timeline.Easing {
     }
 
     /// A value to a whole power, by multiplication alone.
-    private static func raised(_ value: Scalar, to power: Int) -> Scalar {
+    private static func raised(_ value: Scalar, to power: Cardinal) -> Scalar {
         var result: Scalar = 1
-        (0..<power).forEach { _ in result *= value }
+        (0..<power.rawValue).forEach { _ in result *= value }
         return result
     }
 }

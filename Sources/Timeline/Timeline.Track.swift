@@ -100,9 +100,8 @@ extension Timeline.Track {
         result.reserveCapacity(keyframes.count)
         var leaving: Timeline.Easing<Scalar> = .linear
         keyframes.forEach { keyframe in
-            let easing = keyframe.easing
             result.append(Keyframe(at: start + (end - keyframe.time), keyframe.value, easing: leaving))
-            leaving = Timeline.Easing { elapsed, duration in 1 - easing.progress(duration - elapsed, duration) }
+            leaving = keyframe.easing.reversed
         }
         result.reverse()
         return Self(ordered: result)
@@ -131,25 +130,25 @@ extension Timeline.Track where Value == Scalar {
         return Self(ordered: [Keyframe(at: start, 0, easing: easing), Keyframe(at: start + duration, 1)])
     }
 
-    /// Hits that die away: 0 until each hit, its strength at its instant, falling to 0 over its duration on an
-    /// easing, and 0 until the next.
+    /// Pulses that rise at once and die away: 0 until each pulse, its peak at its instant, falling to 0 over
+    /// its duration on an easing, and 0 until the next. The track starts one duration before the first pulse.
     ///
-    /// Each hit lasts a positive duration and starts after the one before has died away; otherwise it
-    /// traps. No hits is 0 throughout.
-    public static func hits(
-        _ hits: [(at: Rational, strength: Scalar, lasting: Rational)],
-        easing: Timeline.Easing<Scalar> = .easeOut(power: 3)
+    /// Each pulse lasts a positive duration and starts after the one before has died away; otherwise it
+    /// traps. No pulses is 0 throughout.
+    public static func pulses(
+        _ pulses: [(at: Rational, peak: Scalar, lasting: Rational)],
+        easing: Timeline.Easing<Scalar> = .linear
     ) -> Self {
-        guard let first = hits.first else { return Self(constant: 0) }
+        guard let first = pulses.first else { return Self(constant: 0) }
         var keyframes = [Keyframe(at: first.at - first.lasting, 0, easing: .hold)]
-        keyframes.reserveCapacity(2 * hits.count + 1)
-        for (index, hit) in hits.enumerated() {
-            precondition(hit.lasting > .zero, "A hit lasts a positive duration")
-            keyframes.append(Keyframe(at: hit.at, hit.strength, easing: easing))
-            let end = hit.at + hit.lasting
-            let next = hits.index(after: index)
-            if next < hits.endIndex { precondition(hits[next].at > end, "A hit starts after the one before has died away") }
-            keyframes.append(Keyframe(at: end, 0, easing: .hold))
+        keyframes.reserveCapacity(2 * pulses.count + 1)
+        var previous: Rational?
+        for pulse in pulses {
+            precondition(pulse.lasting > .zero, "A pulse lasts a positive duration")
+            if let previous { precondition(pulse.at > previous, "A pulse starts after the one before has died away") }
+            keyframes.append(Keyframe(at: pulse.at, pulse.peak, easing: easing))
+            keyframes.append(Keyframe(at: pulse.at + pulse.lasting, 0, easing: .hold))
+            previous = pulse.at + pulse.lasting
         }
         return Self(ordered: keyframes)
     }
@@ -165,12 +164,10 @@ extension Timeline.Track where Value == Scalar {
     }
 
     /// The value at an instant on a smooth curve through the keyframes' values, ignoring their easings: a cubic
-    /// through each pair of keyframes whose slope at a keyframe is that of the line through its two neighbours.
-    ///
-    /// The slope at the first and last keyframes, in value per unit of time, is `first` and `last`, or, when
-    /// `nil`, that of the line to their one neighbour. Before the first keyframe and from the last on the value is
-    /// the first and the last value.
-    public func smooth(at time: Rational, first: Scalar? = nil, last: Scalar? = nil) -> Value {
+    /// through each pair of keyframes whose slope at a keyframe is that of the line through its two neighbours,
+    /// or, at the first and last keyframes, through their one neighbour. Before the first keyframe and from the
+    /// last on the value is the first and the last value.
+    public func smooth(at time: Rational) -> Value {
         var low = keyframes.startIndex
         var high = keyframes.endIndex
         while high - low > 1 {
@@ -182,17 +179,15 @@ extension Timeline.Track where Value == Scalar {
         let to = keyframes[high]
         let span = (to.time - from.time).approximation(as: Scalar.self)
         let t = (time - from.time).approximation(as: Scalar.self) / span
-        let leaving = slope(at: low, first: first, last: last) * span
-        let entering = slope(at: high, first: first, last: last) * span
+        let leaving = slope(at: low) * span
+        let entering = slope(at: high) * span
         let (t2, t3) = (t * t, t * t * t)
         let start = (2 * t3 - 3 * t2 + 1) * from.value + (t3 - 2 * t2 + t) * leaving
         return start + (-2 * t3 + 3 * t2) * to.value + (t3 - t2) * entering
     }
 
     /// The slope of the smooth curve at a keyframe.
-    private func slope(at index: Int, first: Scalar?, last: Scalar?) -> Scalar {
-        if index == keyframes.startIndex, let first { return first }
-        if index == keyframes.endIndex - 1, let last { return last }
+    private func slope(at index: Int) -> Scalar {
         let low = Swift.max(index - 1, keyframes.startIndex)
         let high = Swift.min(index + 1, keyframes.endIndex - 1)
         let run = (keyframes[high].time - keyframes[low].time).approximation(as: Scalar.self)
