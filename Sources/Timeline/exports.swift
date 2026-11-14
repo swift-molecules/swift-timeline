@@ -4,4 +4,5 @@
 @_exported public import Point
 @_exported public import Rational
 @_exported public import Spring
+@_exported public import Threefry
 @_exported public import Trigonometry

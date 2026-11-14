@@ -200,7 +200,7 @@ extension `Timeline Tests` {
             var seen: [Double] = []
             _ = thirds.value(
                 at: `Timeline Tests`.ratio(5, 12),
-                interpolating: { from, to, progress in
+                interpolating: { from, _, progress in
                     seen.append(progress)
                     return from
                 }
@@ -665,6 +665,204 @@ extension `Timeline Tests` {
             #expect(Timeline.instants(1, from: 1, to: 4, weights: [Rational]()) == [1])
             #expect(Timeline.instants(2, from: 1, to: 4, weights: [`Timeline Tests`.ratio(1, 1000)]) == [1, 4])
             #expect(Timeline.instants(2, from: 1, to: 4, weights: Self.draws(seed: 5)) == [1, 4])
+        }
+    }
+}
+
+extension `Timeline Tests` {
+    @Suite
+    struct Tail {
+        @Test
+        func `A tail is the last value up to its instant and after it runs on by elapsed time alone`() throws {
+            let spring = try Spring(frequency: 8.0, ratio: 0.6)
+            let track = `Timeline Tests`.Values(from: 0, at: 2, tail: .spring(toward: 1, spring))
+            #expect(track.start == 2 && track.end == 2)
+            #expect(track.value(at: 1) == 0 && track.value(at: 2) == 0)
+            #expect(track.value(at: `Timeline Tests`.ratio(9, 4)) == 1 - spring.displacement(at: 0.25))
+            #expect(track.value(at: 102) != track.value(at: 2))
+            #expect(abs(track.value(at: 22) - 1) < 1e-12)
+            let easing = Timeline.Easing<Double>.spring(spring, velocity: 3)
+            let tail = `Timeline Tests`.Values.Tail.spring(toward: 1, spring, velocity: 3)
+            #expect([0, 0.05, 0.3, 2].allSatisfy { tail.progress($0) == easing.progress($0, 1) })
+            let short = `Timeline Tests`.Values.Tail.spring(toward: 1, frequency: 8, ratio: 0.6, velocity: 3)
+            #expect([0, 0.05, 0.3, 2].allSatisfy { short.progress($0) == tail.progress($0) })
+        }
+
+        @Test
+        func `A tail leaves the last keyframe toward its value, and its progress is not called at that keyframe`() throws {
+            let calls = Counter()
+            let tail = `Timeline Tests`.Values.Tail(toward: 20) { elapsed in
+                calls.increment()
+                return elapsed
+            }
+            let track = try `Timeline Tests`.Values([Keyframe(at: 0, 0), Keyframe(at: 1, 10)], tail: tail)
+            #expect(track.value(at: `Timeline Tests`.ratio(1, 2)) == 5 && track.value(at: 1) == 10)
+            #expect(calls.value == 0)
+            #expect(track.value(at: `Timeline Tests`.ratio(5, 4)) == 12.5)
+            #expect(track.value(at: 3) == 30)
+            #expect(calls.value == 2)
+            #expect(try `Timeline Tests`.Values([Keyframe(at: 0, 0), Keyframe(at: 1, 10)]).value(at: 3) == 10)
+        }
+
+        @Test
+        func `A track appended after a tail cuts it, bridging the gap by the last easing, and brings its own tail`() throws {
+            let first = `Timeline Tests`.Values(ordered: [(0, 0), (1, 10)], easing: .hold)
+            let open = try `Timeline Tests`.Values(first.keyframes, tail: .init(toward: 99) { $0 })
+            let second = `Timeline Tests`.Values(from: 50, at: 0, tail: .init(toward: 60) { $0 })
+            let joined = try open.appending(second, after: 1)
+            #expect(joined.value(at: `Timeline Tests`.ratio(3, 2)) == 10)
+            #expect(joined.value(at: 2) == 50)
+            #expect(joined.value(at: `Timeline Tests`.ratio(5, 2)) == 55)
+            #expect(joined.tail?.value == 60)
+        }
+
+        @Test
+        func `Shifting, stretching and mapping keep a tail, which counts seconds after the last keyframe; reversing drops it`() throws {
+            let track = `Timeline Tests`.Values(ordered: [Keyframe(at: 0, 0), Keyframe(at: 1, 10)], tail: .init(toward: 20) { $0 })
+            #expect(track.shifted(by: 5).value(at: `Timeline Tests`.ratio(13, 2)) == 15)
+            #expect(try track.stretched(by: 2).value(at: `Timeline Tests`.ratio(5, 2)) == 15)
+            let labels = track.map { "v\(Int($0))" }
+            #expect(labels.tail?.value == "v20")
+            #expect(labels.value(at: 9) { from, to, progress in progress < 0.5 ? from : to } == "v20")
+            #expect(track.reversed.tail == nil)
+            #expect(track.reversed.value(at: 3) == 0)
+            #expect(track.staggered(count: 2, every: 1)[1].value(at: `Timeline Tests`.ratio(5, 2)) == 15)
+        }
+    }
+}
+
+extension `Timeline Tests` {
+    /// Two numbers mixed one by one, the least value that is not a scalar.
+    fileprivate struct Pair: Equatable {
+        var x: Double
+        var y: Double
+
+        static func mix(_ from: Self, _ to: Self, _ progress: Double) -> Self {
+            Self(x: `Timeline Tests`.mix(from.x, to.x, progress), y: `Timeline Tests`.mix(from.y, to.y, progress))
+        }
+    }
+
+    @Suite
+    struct Smoothing {
+        @Test
+        func `A track of pairs smooths to what two scalar tracks give, since smoothing needs only the interpolation`() {
+            let times: [Rational] = [0, `Timeline Tests`.ratio(1, 3), 1, `Timeline Tests`.ratio(7, 2), 4]
+            let xs: [Double] = [0, 2, -1, 2, 10]
+            let ys: [Double] = [5, 4, 4, -3, 0.5]
+            let pairs = Timeline.Track<Pair, Double>(ordered: (0..<5).map { Timeline.Track<Pair, Double>.Keyframe(at: times[$0], Pair(x: xs[$0], y: ys[$0])) })
+            let x = `Timeline Tests`.Values(ordered: (0..<5).map { (times[$0], xs[$0]) })
+            let y = `Timeline Tests`.Values(ordered: (0..<5).map { (times[$0], ys[$0]) })
+            let instants = (-6...54).map { `Timeline Tests`.ratio($0, 12) }
+            #expect(instants.allSatisfy { pairs.smooth(at: $0, interpolating: Pair.mix) == Pair(x: x.smooth(at: $0), y: y.smooth(at: $0)) })
+        }
+
+        @Test
+        func `A smooth curve is the Hermite cubic with each keyframe's slope that of its neighbours`() {
+            let keys: [(Rational, Double)] = [(0, 1), (1, 3), (3, 2), (4, 10), (6, -2)]
+            let track = `Timeline Tests`.Values(ordered: keys)
+            func slope(_ index: Int) -> Double {
+                let (low, high) = (Swift.max(index - 1, keys.startIndex), Swift.min(index + 1, keys.endIndex - 1))
+                return (keys[high].1 - keys[low].1) / (keys[high].0 - keys[low].0).approximation(as: Double.self)
+            }
+            keys.indices.dropLast().forEach { index in
+                let (from, to) = (keys[index], keys[index + 1])
+                let span = (to.0 - from.0).approximation(as: Double.self)
+                (1..<16).forEach { step in
+                    let t = Double(step) / 16
+                    let (t2, t3) = (t * t, t * t * t)
+                    let hermite =
+                        (2 * t3 - 3 * t2 + 1) * from.1 + (t3 - 2 * t2 + t) * slope(index) * span
+                        + (-2 * t3 + 3 * t2) * to.1 + (t3 - t2) * slope(index + 1) * span
+                    let time = from.0 + (to.0 - from.0) * `Timeline Tests`.ratio(step, 16)
+                    #expect(abs(track.smooth(at: time) - hermite) < 1e-13)
+                }
+            }
+        }
+
+        @Test
+        func `Smoothing fails with the interpolation's typed failure, and follows the tail after the last keyframe`() throws {
+            let track = `Timeline Tests`.Values(ordered: [Keyframe(at: 0, 0), Keyframe(at: 1, 10)], tail: .init(toward: 20) { $0 })
+            func refuse(_ from: Double, _ to: Double, _ progress: Double) throws(Failure) -> Double { throw Failure() }
+            #expect(throws: Failure()) { try track.smooth(at: `Timeline Tests`.ratio(1, 2), interpolating: refuse) }
+            #expect(try track.smooth(at: 1, interpolating: refuse) == 10)
+            #expect(track.smooth(at: `Timeline Tests`.ratio(3, 2)) == 15)
+        }
+    }
+}
+
+extension `Timeline Tests` {
+    @Suite
+    struct Jitter {
+        fileprivate static let key = Threefry.Key(0x0123_4567_89AB_CDEF, 0xFEDC_BA98_7654_3210)
+
+        @Test
+        func `A key's weights are pinned: one plus the spread times the draw in 1024ths from minus to plus one`() {
+            let jitter = Timeline.Jitter(key: Self.key, spread: `Timeline Tests`.ratio(1, 2))
+            let expected: [(Int, Int)] = [(711, 1024), (1125, 1024), (453, 512), (35, 32), (599, 512), (747, 1024), (617, 1024)]
+            #expect((0...6).allSatisfy { jitter.weight(at: UInt64($0)) == `Timeline Tests`.ratio(expected[$0].0, expected[$0].1) })
+            #expect(Array(jitter.prefix(4)) == (1...4).map { jitter.weight(at: UInt64($0)) })
+            let instants = Timeline.instants(5, from: 0, to: 2, weights: jitter)
+            #expect(instants == [0, `Timeline Tests`.ratio(2250, 4349), `Timeline Tests`.ratio(4062, 4349), `Timeline Tests`.ratio(6302, 4349), 2])
+        }
+
+        @Test
+        func `A weight takes the keyed unit draw down to a multiple of 1/1024, on its own stream`() {
+            for stream in [UInt64(0), 3] {
+                let spread = `Timeline Tests`.ratio(3, 4)
+                let jitter = Timeline.Jitter(key: Self.key, spread: spread, stream: stream)
+                #expect(
+                    (UInt64(0)..<256).allSatisfy { index in
+                        let drawn = Threefry.unit(key: Self.key, stream: stream, index: index, as: Double.self)
+                        let steps = Swift.min(Int((drawn * 1024).rounded(.down)), 1023)
+                        return jitter.weight(at: index) == 1 + spread * `Timeline Tests`.ratio(2 * steps - 1024, 1024)
+                    }
+                )
+            }
+            let other = Timeline.Jitter(key: Self.key, spread: `Timeline Tests`.ratio(1, 2), stream: 1)
+            #expect((1...8).map { other.weight(at: UInt64($0)) } != (1...8).map { Timeline.Jitter(key: Self.key, spread: `Timeline Tests`.ratio(1, 2)).weight(at: UInt64($0)) })
+        }
+
+        @Test
+        func `Weights stay within the spread of one, and no spread is equal weights`() {
+            let spread = `Timeline Tests`.ratio(2, 5)
+            let jitter = Timeline.Jitter(key: Threefry.Key(7, 9), spread: spread)
+            #expect(jitter.prefix(500).allSatisfy { $0 >= 1 - spread && $0 < 1 + spread })
+            #expect(Timeline.Jitter(key: Threefry.Key(7, 9), spread: 0).prefix(50).allSatisfy { $0 == 1 })
+            #expect(Timeline.Jitter(key: Threefry.Key(7, 9), spread: 1).prefix(500).allSatisfy { $0 >= 0 })
+        }
+    }
+}
+
+extension `Timeline Tests` {
+    @Suite
+    struct Series {
+        @Test
+        func `The count at an instant is the events at or before it`() {
+            let series = Timeline.Series(ordered: [1, 2, 2, 3, `Timeline Tests`.ratio(7, 2), 5])
+            let instants = (-4...30).map { `Timeline Tests`.ratio($0, 4) }
+            #expect(instants.allSatisfy { time in series.count(at: time) == Cardinal(UInt(series.instants.filter { $0 <= time }.count)) })
+            #expect(series.count(at: 0) == .zero && series.count(at: 2) == Cardinal(UInt(3)) && series.count(at: 99) == Cardinal(UInt(6)))
+            #expect(Timeline.Series(ordered: []).count(at: 1) == .zero)
+        }
+
+        @Test
+        func `A series by weights has the instants of the stagger`() {
+            let jitter = Timeline.Jitter(key: Threefry.Key(1, 2), spread: `Timeline Tests`.ratio(1, 2))
+            let series = Timeline.Series(12, from: 1, to: 4, weights: jitter)
+            #expect(series.instants == Timeline.instants(12, from: 1, to: 4, weights: jitter))
+            #expect(series.count(at: 4) == Cardinal(UInt(12)) && series.count(at: `Timeline Tests`.ratio(99, 100)) == .zero)
+        }
+
+        @Test
+        func `Two steps on a loop of two blinks is a square wave: on for one blink, off for the next`() throws {
+            let blink = `Timeline Tests`.ratio(1, 2)
+            let wave = Timeline.Track<Bool, Double>.steps([(0, true), (blink, false)])
+            let loop = try Timeline.Loop(period: 2 * blink)
+            (0...80).forEach { eighth in
+                let lit = wave.value(at: `Timeline Tests`.ratio(eighth, 8), looping: loop) { from, _, _ in from }
+                #expect(lit == (eighth / 4).isMultiple(of: 2))
+            }
+            #expect(wave.value(at: -1, looping: loop) { from, _, _ in from })
         }
     }
 }

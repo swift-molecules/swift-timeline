@@ -12,6 +12,7 @@ let package = Package(
         .package(url: "https://github.com/swift-atoms/swift-point.git", branch: "main"),
         .package(url: "https://github.com/swift-atoms/swift-rational.git", branch: "main"),
         .package(url: "https://github.com/swift-atoms/swift-spring.git", branch: "main"),
+        .package(url: "https://github.com/swift-atoms/swift-threefry.git", branch: "main"),
         .package(url: "https://github.com/swift-atoms/swift-trigonometry.git", branch: "main"),
     ],
     targets: [
@@ -24,6 +25,7 @@ let package = Package(
                 .product(name: "Point", package: "swift-point"),
                 .product(name: "Rational", package: "swift-rational"),
                 .product(name: "Spring", package: "swift-spring"),
+                .product(name: "Threefry", package: "swift-threefry"),
                 .product(name: "Trigonometry", package: "swift-trigonometry"),
             ]
         ),
