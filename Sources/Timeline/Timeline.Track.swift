@@ -31,7 +31,7 @@ extension Timeline.Track {
     /// A track through (instant, value) keys written in order in source, every segment on one easing.
     ///
     /// No keys, or instants that do not strictly increase, trap.
-    public init(ordered keys: [(Rational, Value)], easing: Timeline.Easing<Scalar> = .linear) {
+    public init(ordered keys: [(Rational, Value)], easing: Easing<Scalar> = .linear) {
         self.init(ordered: keys.map { Keyframe(at: $0.0, $0.1, easing: easing) })
     }
 
@@ -190,7 +190,7 @@ extension Timeline.Track {
         let (start, end) = (start, end)
         var result: [Keyframe] = []
         result.reserveCapacity(keyframes.count)
-        var leaving: Timeline.Easing<Scalar> = .linear
+        var leaving: Easing<Scalar> = .linear
         keyframes.forEach { keyframe in
             result.append(Keyframe(at: start + (end - keyframe.time), keyframe.value, easing: leaving))
             leaving = keyframe.easing.reversed
@@ -223,7 +223,7 @@ extension Timeline.Track {
 
 extension Timeline.Track where Value == Scalar {
     /// A rise from 0 to 1 that starts at an instant and lasts a positive duration, on an easing.
-    public static func ramp(at start: Rational, lasting duration: Rational, easing: Timeline.Easing<Scalar> = .linear) -> Self {
+    public static func ramp(at start: Rational, lasting duration: Rational, easing: Easing<Scalar> = .linear) -> Self {
         precondition(duration > .zero, "A ramp lasts a positive duration")
         return Self(ordered: [Keyframe(at: start, 0, easing: easing), Keyframe(at: start + duration, 1)])
     }
@@ -235,7 +235,7 @@ extension Timeline.Track where Value == Scalar {
     /// traps. No pulses is 0 throughout.
     public static func pulses(
         _ pulses: [(at: Rational, peak: Scalar, lasting: Rational)],
-        easing: Timeline.Easing<Scalar> = .linear
+        easing: Easing<Scalar> = .linear
     ) -> Self {
         guard let first = pulses.first else { return Self(constant: 0) }
         var keyframes = [Keyframe(at: first.at - first.lasting, 0, easing: .hold)]

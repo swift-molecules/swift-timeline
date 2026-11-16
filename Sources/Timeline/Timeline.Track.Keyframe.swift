@@ -2,9 +2,9 @@ extension Timeline.Track {
     public struct Keyframe {
         public var time: Rational
         public var value: Value
-        public var easing: Timeline.Easing<Scalar>
+        public var easing: Easing<Scalar>
 
-        public init(at time: Rational, _ value: Value, easing: Timeline.Easing<Scalar> = .linear) {
+        public init(at time: Rational, _ value: Value, easing: Easing<Scalar> = .linear) {
             self.time = time
             self.value = value
             self.easing = easing

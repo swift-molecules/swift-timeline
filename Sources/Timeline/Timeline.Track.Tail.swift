@@ -21,18 +21,18 @@ extension Timeline.Track {
 extension Timeline.Track.Tail: Sendable where Value: Sendable {}
 
 extension Timeline.Track.Tail where Scalar: Exponential.`Protocol` & Trigonometry.Circular {
-    /// A spring released toward the value: the progress of ``Timeline/Easing/spring(_:velocity:)``, which is a
+    /// A spring released toward the value: the progress of ``Easing/spring(_:velocity:)``, which is a
     /// function of elapsed time alone. A damped spring settles on the value; one without damping swings about it
     /// for ever.
     public static func spring(toward value: Value, _ spring: Spring<Scalar>, velocity: Scalar = 0) -> Self {
-        let easing = Timeline.Easing<Scalar>.spring(spring, velocity: velocity)
+        let easing = Easing<Scalar>.spring(spring, velocity: velocity)
         return Self(toward: value) { elapsed in easing.progress(elapsed, elapsed) }
     }
 
     /// The spring tail of a spring with a natural frequency and a damping ratio, for numbers written in source:
     /// where `Spring(frequency:ratio:)` would throw, it traps.
     public static func spring(toward value: Value, frequency: Scalar, ratio: Scalar, velocity: Scalar = 0) -> Self {
-        let easing = Timeline.Easing<Scalar>.spring(frequency: frequency, ratio: ratio, velocity: velocity)
+        let easing = Easing<Scalar>.spring(frequency: frequency, ratio: ratio, velocity: velocity)
         return Self(toward: value) { elapsed in easing.progress(elapsed, elapsed) }
     }
 }
