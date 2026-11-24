@@ -1,4 +1,5 @@
 import Foundation
+import Lock
 import Testing
 public import Timeline
 
@@ -159,13 +160,16 @@ extension `Timeline Tests` {
 
 extension `Timeline Tests` {
     /// A count a `@Sendable` easing can add to.
-    fileprivate final class Counter: @unchecked Sendable {
-        private let lock = NSLock()
-        private var count = 0
+    fileprivate struct Counter: Sendable {
+        struct Calls {
+            var count = 0
+        }
 
-        var value: Int { lock.withLock { count } }
+        private let calls = Lock(Calls())
 
-        func increment() { lock.withLock { count += 1 } }
+        var value: Int { calls.withLock { $0.count } }
+
+        func increment() { calls.withLock { $0.count += 1 } }
     }
 }
 

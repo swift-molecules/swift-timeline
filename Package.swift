@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v27), .iOS(.v27), .tvOS(.v27), .watchOS(.v27), .visionOS(.v27)],
     products: [.library(name: "Timeline", targets: ["Timeline"])],
     dependencies: [
+        .package(url: "https://github.com/swift-atoms/swift-lock.git", branch: "main"),
         .package(url: "https://github.com/swift-atoms/swift-cardinal.git", branch: "main"),
         .package(url: "https://github.com/swift-atoms/swift-easing.git", branch: "main"),
         .package(url: "https://github.com/swift-atoms/swift-exponential.git", branch: "main"),
@@ -30,6 +31,7 @@ let package = Package(
         .testTarget(
             name: "Timeline Tests",
             dependencies: [
+                .product(name: "Lock", package: "swift-lock"),
                 .target(name: "Timeline")
             ]
         ),
