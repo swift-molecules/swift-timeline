@@ -228,6 +228,24 @@ extension Timeline.Track where Value == Scalar {
         return Self(ordered: [Keyframe(at: start, 0, easing: easing), Keyframe(at: start + duration, 1)])
     }
 
+    /// An envelope: a rise from 0 to 1 over a duration from the interval's start, 1 until a fall to 0 that ends
+    /// with it. The rise and the fall last positive durations, and together no longer than the interval;
+    /// otherwise it traps.
+    public static func envelope(
+        over interval: Range<Rational>,
+        rise: Rational,
+        fall: Rational,
+        easing: Easing<Scalar> = .linear
+    ) -> Self {
+        precondition(rise > .zero && fall > .zero, "An envelope rises and falls over positive durations")
+        let (risen, falling) = (interval.lowerBound + rise, interval.upperBound - fall)
+        precondition(risen <= falling, "An envelope has risen before it falls")
+        var keyframes = [Keyframe(at: interval.lowerBound, 0, easing: easing), Keyframe(at: risen, 1, easing: easing)]
+        if falling > risen { keyframes.append(Keyframe(at: falling, 1, easing: easing)) }
+        keyframes.append(Keyframe(at: interval.upperBound, 0))
+        return Self(ordered: keyframes)
+    }
+
     /// Pulses that rise at once and die away: 0 until each pulse, its peak at its instant, falling to 0 over
     /// its duration on an easing, and 0 until the next. The track starts one duration before the first pulse.
     ///

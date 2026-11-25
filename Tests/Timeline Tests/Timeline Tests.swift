@@ -427,6 +427,15 @@ extension `Timeline Tests` {
         }
 
         @Test
+        func `An envelope rises, stays up and falls inside its interval`() {
+            let shown = `Timeline Tests`.Values.envelope(over: 1..<6, rise: 1, fall: 2)
+            #expect(shown.value(at: 1) == 0 && shown.value(at: 2) == 1 && shown.value(at: 4) == 1)
+            #expect(shown.value(at: `Timeline Tests`.ratio(3, 2)) == 0.5 && shown.value(at: 5) == 0.5)
+            #expect(shown.value(at: 6) == 0 && shown.value(at: 100) == 0)
+            #expect(`Timeline Tests`.Values.envelope(over: 0..<3, rise: 1, fall: 2).value(at: 1) == 1)
+        }
+
+        @Test
         func `Pulses jump to their peak and die away to zero`() {
             let hits = `Timeline Tests`.Values.pulses(
                 [(at: 1, peak: 1, lasting: 2), (at: 4, peak: 0.5, lasting: 1), (at: 10, peak: 0.8, lasting: 4)],
