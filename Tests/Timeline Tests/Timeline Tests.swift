@@ -583,6 +583,22 @@ extension `Timeline Tests` {
         }
 
         @Test
+        func `A spring track is 0 until its instant and then springs toward 1`() throws {
+            let spring = try Spring(frequency: 13.0, ratio: 0.55)
+            let track = `Timeline Tests`.Values.spring(at: 2, spring)
+            #expect(track.start == 2 && track.value(at: 1) == 0 && track.value(at: 2) == 0)
+            #expect(track.value(at: `Timeline Tests`.ratio(9, 4)) == 1 - spring.displacement(at: 0.25))
+            #expect(track.value(at: `Timeline Tests`.ratio(229, 100)) > 1.1)
+            #expect(abs(track.value(at: 22) - 1) < 1e-12)
+            let written = `Timeline Tests`.Values.spring(at: 2, frequency: 13, ratio: 0.55, velocity: 2)
+            let thrown = `Timeline Tests`.Values.spring(at: 2, spring, velocity: 2)
+            #expect((0...40).allSatisfy { step in
+                let instant = 2 + `Timeline Tests`.ratio(step, 20)
+                return written.value(at: instant) == thrown.value(at: instant)
+            })
+        }
+
+        @Test
         func `A tail leaves the last keyframe toward its value, and its progress is not called at that keyframe`() throws {
             let calls = Counter()
             let tail = `Timeline Tests`.Values.Tail(toward: 20) { elapsed in

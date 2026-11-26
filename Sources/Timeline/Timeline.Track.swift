@@ -288,3 +288,18 @@ extension Timeline.Track where Value == Scalar {
         from + (to - from) * progress
     }
 }
+
+extension Timeline.Track where Value == Scalar, Scalar: Exponential.`Protocol` & Trigonometry.Circular {
+    /// A spring released from 0 toward 1 at an instant: 0 until then, and from then on the progress of
+    /// ``Timeline/Track/Tail/spring(toward:_:velocity:)``, which never ends. A damped spring settles on 1, overshooting
+    /// it on the way when its damping ratio is below one.
+    public static func spring(at start: Rational, _ spring: Spring<Scalar>, velocity: Scalar = 0) -> Self {
+        Self(from: 0, at: start, tail: .spring(toward: 1, spring, velocity: velocity))
+    }
+
+    /// The spring track of a spring with a natural frequency and a damping ratio, for numbers written in source:
+    /// where `Spring(frequency:ratio:)` would throw, it traps.
+    public static func spring(at start: Rational, frequency: Scalar, ratio: Scalar, velocity: Scalar = 0) -> Self {
+        Self(from: 0, at: start, tail: .spring(toward: 1, frequency: frequency, ratio: ratio, velocity: velocity))
+    }
+}
