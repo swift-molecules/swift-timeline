@@ -19,3 +19,8 @@ extension Timeline.Stack.Moment: Sendable where Content: Sendable {}
 extension Timeline.Stack.Moment {
     public var remaining: Rational { lifetime.upperBound - lifetime.lowerBound - age }
 }
+
+extension Timeline.Stack.Moment {
+    /// How long the content lives.
+    public var duration: Rational { lifetime.upperBound - lifetime.lowerBound }
+}

@@ -379,6 +379,30 @@ extension `Timeline Tests` {
         }
 
         @Test
+        func `Parts between cuts meet at each cut, and a part between equal cuts is never alive`() throws {
+            let stack = try Timeline.Stack.sequence(["a", "b", "c"], cuts: [1, 3, 3, `Timeline Tests`.ratio(9, 2)])
+            #expect(stack.layers.map(\.lifetime) == [1..<3, 3..<3, 3..<`Timeline Tests`.ratio(9, 2)])
+            #expect(stack.alive(at: 3).map(\.content) == ["c"])
+            #expect(stack.alive(at: 3).map(\.duration) == [`Timeline Tests`.ratio(3, 2)])
+            #expect(stack.span == 1..<`Timeline Tests`.ratio(9, 2))
+            #expect(try Timeline.Stack<String>.sequence([], cuts: [2]).layers.isEmpty)
+            #expect(throws: Timeline.Stack<String>.Error.cuts) { try Timeline.Stack.sequence(["a"], cuts: [1]) }
+            #expect(throws: Timeline.Stack<String>.Error.cuts) { try Timeline.Stack.sequence(["a", "b"], cuts: [0, 2, 1]) }
+        }
+
+        @Test
+        func `Snapped to a rate, every end is the nearest tick and layers that met still meet`() throws {
+            let frames = try Rate(30)
+            let beats = try Rate(2)
+            let stack = try Timeline.Stack.sequence([("a", beats.instant(3)), ("b", `Timeline Tests`.ratio(1, 7)), ("c", 1)]).snapped(to: frames)
+            #expect(stack.layers.allSatisfy { (frames.position(at: $0.lifetime.lowerBound)).denominator == 1 })
+            #expect(stack.layers.allSatisfy { (frames.position(at: $0.lifetime.upperBound)).denominator == 1 })
+            #expect(zip(stack.layers, stack.layers.dropFirst()).allSatisfy { $0.lifetime.upperBound == $1.lifetime.lowerBound })
+            #expect(stack.layers.map(\.lifetime.lowerBound) == [0, `Timeline Tests`.ratio(3, 2), `Timeline Tests`.ratio(49, 30)])
+            #expect(Timeline.Layer("half", over: `Timeline Tests`.ratio(1, 60)..<1).snapped(to: frames).lifetime.lowerBound == `Timeline Tests`.ratio(1, 30))
+        }
+
+        @Test
         func `Staggered layers share a duration and start one interval apart`() throws {
             let stack = try Timeline.Stack.stagger(["c", "l", "i"], duration: 1, from: 2, every: `Timeline Tests`.ratio(1, 10))
             #expect(stack.layers.map(\.lifetime.lowerBound) == [2, `Timeline Tests`.ratio(21, 10), `Timeline Tests`.ratio(22, 10)])
