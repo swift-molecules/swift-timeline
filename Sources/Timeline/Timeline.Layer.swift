@@ -1,3 +1,5 @@
+public import Rate
+
 extension Timeline {
     public struct Layer<Content> {
         public var lifetime: Range<Rational>
@@ -29,5 +31,13 @@ extension Timeline.Layer {
         _ transform: (Content) throws(Failure) -> Result
     ) throws(Failure) -> Timeline.Layer<Result> {
         Timeline.Layer<Result>(try transform(content), over: lifetime)
+    }
+}
+
+extension Timeline.Layer {
+    /// The layer with each end moved to the start of the tick of `rate` nearest it, the later of two as near. Two
+    /// layers that meet still meet, and a layer shorter than half a tick may come to live over no time.
+    public func snapped(to rate: Rate) -> Self {
+        Self(content, over: rate.start(of: rate.nearest(to: lifetime.lowerBound))..<rate.start(of: rate.nearest(to: lifetime.upperBound)))
     }
 }

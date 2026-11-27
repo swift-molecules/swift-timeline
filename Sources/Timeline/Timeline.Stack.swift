@@ -1,3 +1,5 @@
+public import Rate
+
 extension Timeline {
     public struct Stack<Content> {
         public var layers: [Layer<Content>]
@@ -60,5 +62,22 @@ extension Timeline.Stack {
             time += interval
         }
         return Self(layers)
+    }
+}
+
+extension Timeline.Stack {
+    /// The stack with every layer's ends moved to the nearest tick of `rate`: scenes laid on beats, cut on frames.
+    public func snapped(to rate: Rate) -> Self { Self(layers.map { $0.snapped(to: rate) }) }
+}
+
+extension Timeline.Stack {
+    /// Parts laid end to end between cuts: part `i` lives from `cuts[i]` up to `cuts[i + 1]`. A part between two
+    /// equal cuts lives over no time and is never alive. Fails with `.cuts` unless there is one more cut than
+    /// parts and no cut comes before the one ahead of it.
+    public static func sequence(_ contents: [Content], cuts: [Rational]) throws(Error) -> Self {
+        guard cuts.count == contents.count + 1, zip(cuts, cuts.dropFirst()).allSatisfy({ $0 <= $1 }) else {
+            throw .cuts
+        }
+        return Self(contents.indices.map { index in Timeline.Layer(contents[index], over: cuts[index]..<cuts[index + 1]) })
     }
 }
