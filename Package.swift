@@ -34,7 +34,7 @@ let package = Package(
             name: "Timeline Tests",
             dependencies: [
                 .product(name: "Lock", package: "swift-lock"),
-                .target(name: "Timeline")
+                .target(name: "Timeline"),
             ]
         ),
     ],

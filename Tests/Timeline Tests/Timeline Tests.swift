@@ -592,10 +592,12 @@ extension `Timeline Tests` {
             #expect(abs(track.value(at: 22) - 1) < 1e-12)
             let written = `Timeline Tests`.Values.spring(at: 2, frequency: 13, ratio: 0.55, velocity: 2)
             let thrown = `Timeline Tests`.Values.spring(at: 2, spring, velocity: 2)
-            #expect((0...40).allSatisfy { step in
-                let instant = 2 + `Timeline Tests`.ratio(step, 20)
-                return written.value(at: instant) == thrown.value(at: instant)
-            })
+            #expect(
+                (0...40).allSatisfy { step in
+                    let instant = 2 + `Timeline Tests`.ratio(step, 20)
+                    return written.value(at: instant) == thrown.value(at: instant)
+                }
+            )
         }
 
         @Test
